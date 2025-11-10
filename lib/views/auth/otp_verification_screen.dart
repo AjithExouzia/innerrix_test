@@ -6,11 +6,13 @@ import '../widgets/custom_button.dart';
 class OTPVerificationScreen extends StatefulWidget {
   final String email;
   final bool isFromLogin;
+  final bool isSecondStep;
 
   const OTPVerificationScreen({
     Key? key,
     required this.email,
     this.isFromLogin = true,
+    this.isSecondStep = false,
   }) : super(key: key);
 
   @override
@@ -65,7 +67,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     print('🔄 Resending OTP to: $_enteredEmail');
 
-    final result = await _authController.requestOTP(_enteredEmail);
+    final result =
+        widget.isSecondStep
+            ? await _authController.resendSecondStepOTP()
+            : await _authController.directOTPLogin(_enteredEmail);
 
     if (result['success'] == true) {
       Get.snackbar(
@@ -92,18 +97,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     final isLandscape = size.width > size.height;
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          'OTP Verification',
-          style: TextStyle(fontSize: isTablet ? size.width * 0.035 : 20),
-        ),
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back),
-          onPressed: () => Get.back(),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(isTablet ? size.width * 0.05 : 20.0),
@@ -119,10 +113,6 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
                   // Header Section
                   _buildHeaderSection(size, isTablet),
-                  SizedBox(height: size.height * 0.04),
-
-                  // OTP Illustration
-                  _buildOTPIllustration(size, isTablet),
                   SizedBox(height: size.height * 0.04),
 
                   // OTP Input Section
@@ -152,76 +142,91 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     return Column(
       children: [
         Text(
-          "Verify Your Account",
+          "Let's verify",
           style: TextStyle(
-            fontSize: isTablet ? size.width * 0.045 : 28,
+            fontSize: isTablet ? size.width * 0.05 : 28,
             fontWeight: FontWeight.bold,
-            color: Colors.blue[800],
+            color: Colors.black,
           ),
         ),
         SizedBox(height: size.height * 0.015),
         Text(
-          'We have sent a verification code to',
+          widget.isSecondStep
+              ? 'Second Step Verification'
+              : 'Your Google Account',
           style: TextStyle(
-            fontSize: isTablet ? size.width * 0.025 : 16,
-            color: Colors.grey[600],
+            fontSize: isTablet ? size.width * 0.03 : 16,
+            color: Colors.grey[700],
           ),
         ),
-        SizedBox(height: size.height * 0.008),
+        SizedBox(height: size.height * 0.02),
         Text(
-          _enteredEmail,
-          style: TextStyle(
-            fontSize: isTablet ? size.width * 0.03 : 18,
-            fontWeight: FontWeight.bold,
-            color: Colors.blue[600],
-          ),
-        ),
-        SizedBox(height: size.height * 0.008),
-        Text(
-          'Enter the 6-digit code below to verify your account',
+          widget.isSecondStep
+              ? 'Enter the OTP sent to your email for second step verification'
+              : 'Enter the OTP code we sent to',
           textAlign: TextAlign.center,
           style: TextStyle(
-            fontSize: isTablet ? size.width * 0.022 : 14,
+            fontSize: isTablet ? size.width * 0.025 : 14,
             color: Colors.grey[600],
           ),
         ),
+        SizedBox(height: size.height * 0.008),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            _enteredEmail,
+            style: TextStyle(
+              fontSize: isTablet ? size.width * 0.03 : 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[800],
+            ),
+          ),
+        ),
+        if (!widget.isSecondStep) ...[
+          SizedBox(height: size.height * 0.008),
+          Text(
+            'have to add the word',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: isTablet ? size.width * 0.022 : 12,
+              color: Colors.grey[500],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
       ],
-    );
-  }
-
-  Widget _buildOTPIllustration(Size size, bool isTablet) {
-    return Container(
-      width: isTablet ? size.width * 0.2 : 100,
-      height: isTablet ? size.width * 0.2 : 100,
-      decoration: BoxDecoration(color: Colors.blue[50], shape: BoxShape.circle),
-      child: Icon(
-        Icons.sms_outlined,
-        size: isTablet ? size.width * 0.08 : 50,
-        color: Colors.blue[600],
-      ),
     );
   }
 
   Widget _buildOTPSection(Size size, bool isTablet) {
     final otpFieldSize = isTablet ? size.width * 0.08 : 50.0;
-    final spacing = isTablet ? size.width * 0.02 : 8.0;
 
     return Column(
       children: [
         Text(
-          'Enter OTP Code',
+          'Enter your OTP',
           style: TextStyle(
-            fontSize: isTablet ? size.width * 0.025 : 16,
-            fontWeight: FontWeight.w500,
+            fontSize: isTablet ? size.width * 0.028 : 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
           ),
         ),
-        SizedBox(height: size.height * 0.02),
+        SizedBox(height: size.height * 0.03),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: List.generate(6, (index) {
-            return SizedBox(
+            return Container(
               width: otpFieldSize,
               height: otpFieldSize,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[400]!),
+                borderRadius: BorderRadius.circular(8),
+                color: Colors.grey[50],
+              ),
               child: TextField(
                 controller: _otpControllers[index],
                 focusNode: _focusNodes[index],
@@ -231,19 +236,11 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                 style: TextStyle(
                   fontSize: isTablet ? size.width * 0.03 : 20,
                   fontWeight: FontWeight.bold,
+                  color: Colors.black,
                 ),
                 decoration: InputDecoration(
                   counterText: '',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.blue),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.blue, width: 2),
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[50],
+                  border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                 ),
                 onChanged: (value) {
@@ -291,7 +288,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
               ),
             )
             : Text(
-              '${_resendTimer ~/ 60}:${(_resendTimer % 60).toString().padLeft(2, '0')}',
+              '(${_resendTimer ~/ 60}:${(_resendTimer % 60).toString().padLeft(2, '0')})',
               style: TextStyle(
                 fontSize: isTablet ? size.width * 0.025 : 16,
                 fontWeight: FontWeight.bold,
@@ -303,11 +300,34 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
   }
 
   Widget _buildVerifyButton() {
-    return Obx(
-      () => CustomButton(
-        text: 'Verify & Continue',
-        isLoading: _authController.isLoading.value,
+    return Container(
+      width: double.infinity,
+      height: 50,
+      margin: EdgeInsets.symmetric(horizontal: 20),
+      child: ElevatedButton(
         onPressed: _verifyOTP,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.yellow,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          elevation: 2,
+        ),
+        child: Obx(
+          () =>
+              _authController.isLoading.value
+                  ? SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    ),
+                  )
+                  : Text(
+                    'Verify OTP',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+        ),
       ),
     );
   }
@@ -327,7 +347,10 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
 
     print('✅ Verifying OTP: $otp for email: $_enteredEmail');
 
-    final result = await _authController.verifyOTP(_enteredEmail, otp);
+    final result =
+        widget.isSecondStep
+            ? await _authController.verifySecondStepOTP(otp)
+            : await _authController.verifyOTP(_enteredEmail, otp);
 
     if (result['success'] == true) {
       final shouldNavigate = result['shouldNavigate'] ?? true;

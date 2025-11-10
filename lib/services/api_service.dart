@@ -14,13 +14,8 @@ class ApiService {
       final response = await _dio.post(
         '/login',
         data: {'email': email.trim(), 'password': password.trim()},
-        options: Options(
-          validateStatus: (status) => true, // Accept all status codes
-        ),
+        options: Options(validateStatus: (status) => true),
       );
-
-      print('📨 Login Response Status: ${response.statusCode}');
-      print('📨 Login Response Data: ${response.data}');
 
       return AuthResponse.fromJson(
         response.data is Map ? response.data : {'data': response.data},
@@ -103,7 +98,6 @@ class ApiService {
     }
   }
 
-  // Home APIs (keep existing implementation)
   Future<HomeData> getHomeData() async {
     try {
       final response = await _dio.get('/v1/home');

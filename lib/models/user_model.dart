@@ -28,7 +28,7 @@ class User {
       name: json['name'] ?? '',
       email: json['email'] ?? '',
       phoneNumber: json['phone_number'],
-      token: json['token'] ?? '',
+      token: json['token'] ?? json['access_token'] ?? '',
     );
   }
 
@@ -39,5 +39,10 @@ class User {
       'phone_number': phoneNumber,
       'token': token,
     };
+  }
+
+  @override
+  String toString() {
+    return 'User(name: $name, email: $email, phone: $phoneNumber)';
   }
 }

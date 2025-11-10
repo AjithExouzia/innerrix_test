@@ -8,6 +8,9 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Hive.initFlutter();
+
+  await Hive.deleteBoxFromDisk('userBox');
+
   await StorageService.init();
 
   runApp(MyApp());

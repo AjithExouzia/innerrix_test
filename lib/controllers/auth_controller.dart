@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:get/get.dart';
+import '../models/auth_response_model.dart';
 import '../services/api_service.dart';
 import '../services/storage_service.dart';
 
@@ -8,109 +9,119 @@ class AuthController extends GetxController {
 
   var isLoading = false.obs;
   var errorMessage = ''.obs;
+  var requiresOTP = false.obs;
+  String? _pendingEmail;
 
-  Future<Map<String, dynamic>> login(String email, String password) async {
+  Future<Map<String, dynamic>> verifyCredentials(
+    String email,
+    String password,
+  ) async {
     try {
       isLoading.value = true;
       errorMessage.value = '';
+      requiresOTP.value = false;
 
-      print('🎯 Starting login process for: $email');
+      print('🔐 Step 1: Verifying credentials for: $email');
 
       final response = await _apiService.login(email, password);
 
-      print('🎯 Login response: ${response.toString()}');
+      print('🔐 Credentials verification response: ${response.toString()}');
 
       if (response.success) {
-        print('✅ Login successful, processing data...');
+        if (response.data?['requires_otp'] == true ||
+            response.message.toLowerCase().contains('otp') ||
+            response.token == null) {
+          print('📱 OTP required for second verification step');
+          _pendingEmail = email;
+          requiresOTP.value = true;
 
-        // Check if we have a token to save
-        if (response.token != null && response.token!.isNotEmpty) {
-          print('🔑 Saving token: ${response.token}');
-          await StorageService.saveToken(response.token!);
-        } else {
-          print('⚠️ No token received in response');
-        }
+          // Request OTP for the second step
+          final otpResult = await _apiService.requestOTP(email);
 
-        // Check if we have user data to save
-        if (response.user != null) {
-          print('👤 Saving user data');
-          await StorageService.saveUser(response.user!);
-        } else {
-          print('⚠️ No user data received in response');
-        }
-
-        // Check if we have any data that might contain token/user
-        if (response.data != null) {
-          print('📦 Additional response data: ${response.data}');
-
-          // Try to extract token from data if not already set
-          if (response.token == null && response.data!['token'] != null) {
-            final token = response.data!['token'].toString();
-            print('🔑 Saving token from data: $token');
-            await StorageService.saveToken(token);
+          if (otpResult.success) {
+            return {
+              'success': true,
+              'message': 'Credentials verified. OTP sent to your email.',
+              'requiresOTP': true,
+              'shouldNavigate': false,
+            };
+          } else {
+            return {
+              'success': false,
+              'message': 'Credentials verified but failed to send OTP',
+              'requiresOTP': false,
+              'shouldNavigate': false,
+            };
           }
-        }
-
-        // Verify we have what we need to proceed
-        final token = await StorageService.getToken();
-        final user = await StorageService.getUser();
-
-        print('🔍 Post-login verification:');
-        print('   Token exists: ${token != null}');
-        print('   User exists: ${user != null}');
-
-        if (token != null || user != null) {
-          print('🚀 Navigation conditions met, proceeding to home...');
-          return {
-            'success': true,
-            'message': response.message,
-            'shouldNavigate': true,
-          };
         } else {
-          print('⚠️ No token or user data saved, but API returned success');
+          print('✅ Single-step login successful');
+          await _completeLogin(response);
           return {
             'success': true,
             'message': response.message,
-            'shouldNavigate': true, // Still try to navigate
+            'requiresOTP': false,
+            'shouldNavigate': true,
           };
         }
       } else {
-        print('❌ Login failed: ${response.message}');
+        print('❌ Credentials verification failed: ${response.message}');
         errorMessage.value = response.message;
         return {
           'success': false,
           'message': response.message,
+          'requiresOTP': false,
           'shouldNavigate': false,
         };
       }
     } catch (e) {
       String errorMsg = _extractErrorMessage(e);
-      print('💥 Login exception: $errorMsg');
+      print('💥 Credentials verification exception: $errorMsg');
       errorMessage.value = errorMsg;
-      return {'success': false, 'message': errorMsg, 'shouldNavigate': false};
+      return {
+        'success': false,
+        'message': errorMsg,
+        'requiresOTP': false,
+        'shouldNavigate': false,
+      };
     } finally {
       isLoading.value = false;
     }
   }
 
-  Future<Map<String, dynamic>> requestOTP(String email) async {
+  Future<Map<String, dynamic>> verifySecondStepOTP(String otp) async {
     try {
+      if (_pendingEmail == null) {
+        return {
+          'success': false,
+          'message': 'No pending authentication found',
+          'shouldNavigate': false,
+        };
+      }
+
       isLoading.value = true;
       errorMessage.value = '';
 
-      print('📱 Requesting OTP for: $email');
+      print('✅ Step 2: Verifying OTP for: $_pendingEmail');
 
-      final response = await _apiService.requestOTP(email);
+      final response = await _apiService.verifyOTP(_pendingEmail!, otp);
 
-      print('📱 OTP Request response: ${response.toString()}');
+      print('✅ OTP verification response: ${response.toString()}');
 
       if (response.success) {
+        print('🚀 Two-step authentication completed successfully');
+        await _completeLogin(response);
+
+        // Clear pending email
+        _pendingEmail = null;
+        requiresOTP.value = false;
+
         return {
           'success': true,
           'message': response.message,
-          'shouldNavigate': false,
+          'shouldNavigate': true,
         };
       } else {
+        print('❌ OTP verification failed: ${response.message}');
         errorMessage.value = response.message;
         return {
           'success': false,
@@ -120,7 +131,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       String errorMsg = _extractErrorMessage(e);
-      print('💥 OTP Request exception: $errorMsg');
+      print('💥 OTP verification exception: $errorMsg');
       errorMessage.value = errorMsg;
       return {'success': false, 'message': errorMsg, 'shouldNavigate': false};
     } finally {
@@ -133,70 +144,23 @@ class AuthController extends GetxController {
       isLoading.value = true;
       errorMessage.value = '';
 
-      print('✅ Verifying OTP: $otp for: $email');
+      print('✅ Direct OTP verification for: $email');
 
       final response = await _apiService.verifyOTP(email, otp);
 
-      print('✅ OTP Verification response: ${response.toString()}');
+      print('✅ Direct OTP verification response: ${response.toString()}');
 
       if (response.success) {
-        print('✅ OTP verification successful, processing data...');
+        print('🚀 Direct OTP authentication completed successfully');
+        await _completeLogin(response);
 
-        // Check if we have a token to save
-        if (response.token != null && response.token!.isNotEmpty) {
-          print('🔑 Saving token: ${response.token}');
-          await StorageService.saveToken(response.token!);
-        } else {
-          print('⚠️ No token received in OTP response');
-        }
-
-        // Check if we have user data to save
-        if (response.user != null) {
-          print('👤 Saving user data');
-          await StorageService.saveUser(response.user!);
-        } else {
-          print('⚠️ No user data received in OTP response');
-        }
-
-        // Check if we have any data that might contain token/user
-        if (response.data != null) {
-          print('📦 Additional OTP response data: ${response.data}');
-
-          // Try to extract token from data if not already set
-          if (response.token == null && response.data!['token'] != null) {
-            final token = response.data!['token'].toString();
-            print('🔑 Saving token from OTP data: $token');
-            await StorageService.saveToken(token);
-          }
-        }
-
-        // Verify we have what we need to proceed
-        final token = await StorageService.getToken();
-        final user = await StorageService.getUser();
-
-        print('🔍 Post-OTP verification:');
-        print('   Token exists: ${token != null}');
-        print('   User exists: ${user != null}');
-
-        if (token != null || user != null) {
-          print('🚀 OTP verification conditions met, proceeding to home...');
-          return {
-            'success': true,
-            'message': response.message,
-            'shouldNavigate': true,
-          };
-        } else {
-          print(
-            '⚠️ No token or user data saved from OTP, but API returned success',
-          );
-          return {
-            'success': true,
-            'message': response.message,
-            'shouldNavigate': true, // Still try to navigate
-          };
-        }
+        return {
+          'success': true,
+          'message': response.message,
+          'shouldNavigate': true,
+        };
       } else {
-        print('❌ OTP verification failed: ${response.message}');
+        print('❌ Direct OTP verification failed: ${response.message}');
         errorMessage.value = response.message;
         return {
           'success': false,
@@ -206,7 +170,7 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       String errorMsg = _extractErrorMessage(e);
-      print('💥 OTP Verification exception: $errorMsg');
+      print('💥 Direct OTP verification exception: $errorMsg');
       errorMessage.value = errorMsg;
       return {'success': false, 'message': errorMsg, 'shouldNavigate': false};
     } finally {
@@ -214,6 +178,118 @@ class AuthController extends GetxController {
     }
   }
 
+  Future<void> _completeLogin(AuthResponse response) async {
+    if (response.token != null && response.token!.isNotEmpty) {
+      await StorageService.saveToken(response.token!);
+      print('🔑 Token saved: ${response.token}');
+    }
+
+    if (response.user != null) {
+      await StorageService.saveUser(response.user!);
+      print('👤 User data saved: ${response.user!.email}');
+    }
+
+    if (response.token == null &&
+        response.data != null &&
+        response.data!['token'] != null) {
+      final token = response.data!['token'].toString();
+      await StorageService.saveToken(token);
+      print('🔑 Token saved from data: $token');
+    }
+  }
+
+  Future<Map<String, dynamic>> resendSecondStepOTP() async {
+    if (_pendingEmail == null) {
+      return {'success': false, 'message': 'No pending authentication found'};
+    }
+
+    print('🔄 Resending OTP for second step: $_pendingEmail');
+
+    final result = await _apiService.requestOTP(_pendingEmail!);
+
+    if (result.success) {
+      return {
+        'success': true,
+        'message': result.message ?? 'OTP sent successfully',
+      };
+    } else {
+      return {
+        'success': false,
+        'message': result.message ?? 'Failed to resend OTP',
+      };
+    }
+  }
+
+  // Direct OTP login (bypasses password verification)
+  Future<Map<String, dynamic>> directOTPLogin(String email) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      print('📱 Direct OTP login for: $email');
+
+      final response = await _apiService.requestOTP(email);
+
+      if (response.success) {
+        _pendingEmail = email;
+        requiresOTP.value = true;
+        return {
+          'success': true,
+          'message': response.message ?? 'OTP sent to your email',
+          'requiresOTP': true,
+        };
+      } else {
+        errorMessage.value = response.message;
+        return {
+          'success': false,
+          'message': response.message ?? 'Failed to send OTP',
+          'requiresOTP': false,
+        };
+      }
+    } catch (e) {
+      String errorMsg = _extractErrorMessage(e);
+      errorMessage.value = errorMsg;
+      return {'success': false, 'message': errorMsg, 'requiresOTP': false};
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Traditional login (for backward compatibility)
+  Future<Map<String, dynamic>> login(String email, String password) async {
+    try {
+      isLoading.value = true;
+      errorMessage.value = '';
+
+      print('🔐 Traditional login for: $email');
+
+      final response = await _apiService.login(email, password);
+
+      if (response.success) {
+        await _completeLogin(response);
+        return {
+          'success': true,
+          'message': response.message,
+          'shouldNavigate': true,
+        };
+      } else {
+        errorMessage.value = response.message;
+        return {
+          'success': false,
+          'message': response.message,
+          'shouldNavigate': false,
+        };
+      }
+    } catch (e) {
+      String errorMsg = _extractErrorMessage(e);
+      errorMessage.value = errorMsg;
+      return {'success': false, 'message': errorMsg, 'shouldNavigate': false};
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  // Registration
   Future<Map<String, dynamic>> register(
     String name,
     String email,
@@ -233,66 +309,14 @@ class AuthController extends GetxController {
         phoneNumber,
       );
 
-      print('👤 Registration response: ${response.toString()}');
-
       if (response.success) {
-        print('✅ Registration successful, processing data...');
-
-        // Check if we have a token to save
-        if (response.token != null && response.token!.isNotEmpty) {
-          print('🔑 Saving token: ${response.token}');
-          await StorageService.saveToken(response.token!);
-        } else {
-          print('⚠️ No token received in registration response');
-        }
-
-        // Check if we have user data to save
-        if (response.user != null) {
-          print('👤 Saving user data');
-          await StorageService.saveUser(response.user!);
-        } else {
-          print('⚠️ No user data received in registration response');
-        }
-
-        // Check if we have any data that might contain token/user
-        if (response.data != null) {
-          print('📦 Additional registration data: ${response.data}');
-
-          // Try to extract token from data if not already set
-          if (response.token == null && response.data!['token'] != null) {
-            final token = response.data!['token'].toString();
-            print('🔑 Saving token from registration data: $token');
-            await StorageService.saveToken(token);
-          }
-        }
-
-        // Verify we have what we need to proceed
-        final token = await StorageService.getToken();
-        final user = await StorageService.getUser();
-
-        print('🔍 Post-registration verification:');
-        print('   Token exists: ${token != null}');
-        print('   User exists: ${user != null}');
-
-        if (token != null || user != null) {
-          print('🚀 Registration conditions met, proceeding to home...');
-          return {
-            'success': true,
-            'message': response.message,
-            'shouldNavigate': true,
-          };
-        } else {
-          print(
-            '⚠️ No token or user data saved from registration, but API returned success',
-          );
-          return {
-            'success': true,
-            'message': response.message,
-            'shouldNavigate': true, // Still try to navigate
-          };
-        }
+        await _completeLogin(response);
+        return {
+          'success': true,
+          'message': response.message,
+          'shouldNavigate': true,
+        };
       } else {
-        print('❌ Registration failed: ${response.message}');
         errorMessage.value = response.message;
         return {
           'success': false,
@@ -302,7 +326,6 @@ class AuthController extends GetxController {
       }
     } catch (e) {
       String errorMsg = _extractErrorMessage(e);
-      print('💥 Registration exception: $errorMsg');
       errorMessage.value = errorMsg;
       return {'success': false, 'message': errorMsg, 'shouldNavigate': false};
     } finally {
@@ -330,14 +353,10 @@ class AuthController extends GetxController {
     return error.toString();
   }
 
-  // Logout method
-  Future<void> logout() async {
-    try {
-      await StorageService.clear();
-      Get.offAllNamed('/login');
-    } catch (e) {
-      print('💥 Logout error: $e');
-    }
+  // Clear pending authentication
+  void clearPendingAuth() {
+    _pendingEmail = null;
+    requiresOTP.value = false;
   }
 
   // Check if user is logged in
@@ -345,5 +364,16 @@ class AuthController extends GetxController {
     final token = await StorageService.getToken();
     final user = await StorageService.getUser();
     return token != null || user != null;
+  }
+
+  // Logout
+  Future<void> logout() async {
+    try {
+      await StorageService.clear();
+      clearPendingAuth();
+      Get.offAllNamed('/login');
+    } catch (e) {
+      print('💥 Logout error: $e');
+    }
   }
 }

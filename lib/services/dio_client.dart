@@ -22,7 +22,6 @@ class DioClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          // Add token if available
           final token = await StorageService.getToken();
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';

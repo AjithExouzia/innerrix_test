@@ -22,6 +22,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final isLandscape = size.width > size.height;
 
     return Scaffold(
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.all(isTablet ? size.width * 0.05 : 20.0),
@@ -38,12 +39,16 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     if (!isLandscape) SizedBox(height: size.height * 0.05),
 
-                    // Header Section
                     _buildHeaderSection(size, isTablet),
                     SizedBox(height: size.height * 0.03),
 
-                    // Form Section
-                    _buildFormSection(size, isTablet),
+                    _buildEmailSection(size, isTablet),
+
+                    _buildPasswordSection(size, isTablet),
+
+                    _buildForgetPasswordSection(size, isTablet),
+
+                    _buildLoginButton(),
 
                     SizedBox(height: size.height * 0.02),
 
@@ -80,36 +85,41 @@ class _LoginScreenState extends State<LoginScreen> {
           style: TextStyle(
             fontSize: isTablet ? size.width * 0.04 : 24,
             fontWeight: FontWeight.bold,
+            color: Colors.black,
           ),
         ),
         SizedBox(height: size.height * 0.008),
         Text(
           'Enter your email and password to log in',
-          style: TextStyle(fontSize: isTablet ? size.width * 0.025 : 16),
+          style: TextStyle(
+            fontSize: isTablet ? size.width * 0.025 : 16,
+            color: Colors.grey[600],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildFormSection(Size size, bool isTablet) {
+  Widget _buildEmailSection(Size size, bool isTablet) {
+    return CustomTextField(
+      controller: _emailController,
+      label: 'Email',
+      validator: (value) {
+        if (value == null || value.isEmpty) {
+          return 'Please enter email';
+        }
+        if (!value.isEmail) {
+          return 'Please enter valid email';
+        }
+        return null;
+      },
+    );
+  }
+
+  Widget _buildPasswordSection(Size size, bool isTablet) {
     return Column(
       children: [
-        CustomTextField(
-          controller: _emailController,
-          label: 'Email',
-          validator: (value) {
-            if (value == null || value.isEmpty) {
-              return 'Please enter email';
-            }
-            if (!value.isEmail) {
-              return 'Please enter valid email';
-            }
-            return null;
-          },
-        ),
-
         SizedBox(height: size.height * 0.02),
-
         CustomTextField(
           controller: _passwordController,
           label: 'Password',
@@ -124,32 +134,36 @@ class _LoginScreenState extends State<LoginScreen> {
             return null;
           },
         ),
-
-        SizedBox(height: size.height * 0.02),
-
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
-            onPressed: () {
-              // Handle forget password
-            },
-            child: Text(
-              'Forget Password',
-              style: TextStyle(fontSize: isTablet ? size.width * 0.025 : 16),
-            ),
-          ),
-        ),
-
-        SizedBox(height: size.height * 0.02),
-
-        Obx(
-          () => CustomButton(
-            text: 'Log in',
-            isLoading: _authController.isLoading.value,
-            onPressed: _login,
-          ),
-        ),
       ],
+    );
+  }
+
+  Widget _buildForgetPasswordSection(Size size, bool isTablet) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        onPressed: () {
+          _showForgotPasswordDialog();
+        },
+        child: Text(
+          'Forget Password?',
+          style: TextStyle(
+            fontSize: isTablet ? size.width * 0.025 : 16,
+            color: Colors.blue,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return Obx(
+      () => CustomButton(
+        text: 'Log in',
+        isLoading: _authController.isLoading.value,
+        onPressed: _loginWithCredentials,
+      ),
     );
   }
 
@@ -163,7 +177,10 @@ class _LoginScreenState extends State<LoginScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
                 'OR',
-                style: TextStyle(fontSize: isTablet ? size.width * 0.025 : 16),
+                style: TextStyle(
+                  fontSize: isTablet ? size.width * 0.025 : 16,
+                  color: Colors.grey[600],
+                ),
               ),
             ),
             Expanded(child: Divider()),
@@ -173,45 +190,21 @@ class _LoginScreenState extends State<LoginScreen> {
         SizedBox(height: size.height * 0.02),
 
         OutlinedButton(
-          onPressed: () async {
-            if (_emailController.text.isEmpty ||
-                !_emailController.text.isEmail) {
-              Get.snackbar('Error', 'Please enter a valid email address');
-              return;
-            }
-
-            final result = await _authController.requestOTP(
-              _emailController.text.trim(),
-            );
-
-            if (result['success'] == true) {
-              Get.toNamed(
-                '/otp-verification',
-                arguments: {
-                  'email': _emailController.text.trim(),
-                  'isFromLogin': true,
-                },
-              );
-            } else {
-              Get.snackbar(
-                'Error',
-                result['message'] ?? 'Failed to send OTP',
-                backgroundColor: Colors.red,
-                colorText: Colors.white,
-              );
-            }
-          },
+          onPressed: _loginWithOTPOnly,
           style: OutlinedButton.styleFrom(
-            foregroundColor: Colors.blue,
-            side: BorderSide(color: Colors.blue),
+            foregroundColor: Colors.yellow,
+            side: BorderSide(color: Colors.yellowAccent),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
             minimumSize: Size(double.infinity, 50),
           ),
           child: Text(
-            'Login with OTP',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            'Login with OTP only',
+            style: TextStyle(
+              fontSize: isTablet ? size.width * 0.025 : 16,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
       ],
@@ -223,19 +216,75 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         SizedBox(height: size.height * 0.02),
 
-        CustomButton(
-          text: 'Continue with Google',
-          backgroundColor: Colors.white,
-          textColor: Colors.black,
-          onPressed: () {},
+        Row(
+          children: [
+            Expanded(child: Divider()),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              child: Text(
+                'or continue with',
+                style: TextStyle(
+                  fontSize: isTablet ? size.width * 0.025 : 16,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ),
+            Expanded(child: Divider()),
+          ],
         ),
 
-        SizedBox(height: size.height * 0.01),
+        SizedBox(height: size.height * 0.02),
 
-        CustomButton(
-          text: 'Continue with Facebook',
-          backgroundColor: Colors.blue[800]!,
-          onPressed: () {},
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {
+                  // Google login
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black,
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.g_mobiledata, size: 20, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Google', style: TextStyle(fontSize: 14)),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () {
+                  // Facebook login
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.black,
+                  side: BorderSide(color: Colors.grey[300]!),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.facebook, size: 20, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Facebook', style: TextStyle(fontSize: 14)),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -250,13 +299,14 @@ class _LoginScreenState extends State<LoginScreen> {
         child: RichText(
           text: TextSpan(
             text: "Don't have an account? ",
-            style: TextStyle(color: Colors.black),
+            style: TextStyle(color: Colors.black, fontSize: 14),
             children: [
               TextSpan(
                 text: "Sign Up",
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
                   color: Colors.blue,
+                  fontSize: 14,
                 ),
               ),
             ],
@@ -266,23 +316,36 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  void _login() async {
+  void _loginWithCredentials() async {
     if (_formKey.currentState!.validate()) {
-      print('🎯 Login form validated, calling controller...');
+      print('🎯 Step 1: Verifying email and password...');
 
-      final result = await _authController.login(
+      final result = await _authController.verifyCredentials(
         _emailController.text.trim(),
         _passwordController.text.trim(),
       );
 
-      print('🎯 Login result: $result');
+      print('🎯 Credentials verification result: $result');
 
       if (result['success'] == true) {
-        final shouldNavigate = result['shouldNavigate'] ?? true;
+        if (result['requiresOTP'] == true) {
+          // Step 2: Navigate to OTP verification
+          print('📱 Step 2: Navigating to OTP verification...');
+          Get.toNamed(
+            '/otp-verification',
+            arguments: {
+              'email': _emailController.text.trim(),
+              'isFromLogin': true,
+              'isSecondStep': true,
+            },
+          );
+        } else {
+          final shouldNavigate = result['shouldNavigate'] ?? true;
 
-        if (shouldNavigate) {
-          print('🚀 Login successful, navigating to home...');
-          Get.offAllNamed('/home');
+          if (shouldNavigate) {
+            print('🚀 Single-step login successful, navigating to home...');
+            Get.offAllNamed('/home');
+          }
         }
 
         Get.snackbar(
@@ -302,6 +365,91 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     }
+  }
+
+  void _loginWithOTPOnly() async {
+    if (_emailController.text.isEmpty || !_emailController.text.isEmail) {
+      Get.snackbar(
+        'Error',
+        'Please enter a valid email address',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+      return;
+    }
+
+    print('📱 Direct OTP login requested for: ${_emailController.text.trim()}');
+
+    final result = await _authController.directOTPLogin(
+      _emailController.text.trim(),
+    );
+
+    if (result['success'] == true) {
+      Get.toNamed(
+        '/otp-verification',
+        arguments: {
+          'email': _emailController.text.trim(),
+          'isFromLogin': true,
+          'isSecondStep': false,
+        },
+      );
+
+      Get.snackbar(
+        'Success',
+        result['message'] ?? 'OTP sent to your email',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        duration: Duration(seconds: 3),
+      );
+    } else {
+      Get.snackbar(
+        'Error',
+        result['message'] ?? 'Failed to send OTP',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: Duration(seconds: 5),
+      );
+    }
+  }
+
+  void _showForgotPasswordDialog() {
+    Get.defaultDialog(
+      title: 'Forgot Password?',
+      titleStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      content: Column(
+        children: [
+          Text(
+            'Enter your email address and we will send you a password reset link.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 14),
+          ),
+          SizedBox(height: 20),
+          TextField(
+            decoration: InputDecoration(
+              labelText: 'Email Address',
+              border: OutlineInputBorder(),
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+          ),
+        ],
+      ),
+      confirm: ElevatedButton(
+        onPressed: () {
+          Get.back();
+          Get.snackbar(
+            'Success',
+            'Password reset link sent to your email',
+            backgroundColor: Colors.green,
+            colorText: Colors.white,
+          );
+        },
+        child: Text('Send Reset Link'),
+      ),
+      cancel: TextButton(
+        onPressed: () => Get.back(),
+        child: Text('Cancel', style: TextStyle(color: Colors.grey)),
+      ),
+    );
   }
 
   @override
