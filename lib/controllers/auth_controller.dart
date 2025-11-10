@@ -23,6 +23,7 @@ class AuthController extends GetxController {
       if (response.success) {
         print('✅ Login successful, processing data...');
 
+        // Check if we have a token to save
         if (response.token != null && response.token!.isNotEmpty) {
           print('🔑 Saving token: ${response.token}');
           await StorageService.saveToken(response.token!);
@@ -30,6 +31,7 @@ class AuthController extends GetxController {
           print('⚠️ No token received in response');
         }
 
+        // Check if we have user data to save
         if (response.user != null) {
           print('👤 Saving user data');
           await StorageService.saveUser(response.user!);
@@ -37,9 +39,11 @@ class AuthController extends GetxController {
           print('⚠️ No user data received in response');
         }
 
+        // Check if we have any data that might contain token/user
         if (response.data != null) {
           print('📦 Additional response data: ${response.data}');
 
+          // Try to extract token from data if not already set
           if (response.token == null && response.data!['token'] != null) {
             final token = response.data!['token'].toString();
             print('🔑 Saving token from data: $token');
@@ -47,6 +51,7 @@ class AuthController extends GetxController {
           }
         }
 
+        // Verify we have what we need to proceed
         final token = await StorageService.getToken();
         final user = await StorageService.getUser();
 
@@ -137,6 +142,7 @@ class AuthController extends GetxController {
       if (response.success) {
         print('✅ OTP verification successful, processing data...');
 
+        // Check if we have a token to save
         if (response.token != null && response.token!.isNotEmpty) {
           print('🔑 Saving token: ${response.token}');
           await StorageService.saveToken(response.token!);
@@ -144,6 +150,7 @@ class AuthController extends GetxController {
           print('⚠️ No token received in OTP response');
         }
 
+        // Check if we have user data to save
         if (response.user != null) {
           print('👤 Saving user data');
           await StorageService.saveUser(response.user!);
@@ -151,9 +158,11 @@ class AuthController extends GetxController {
           print('⚠️ No user data received in OTP response');
         }
 
+        // Check if we have any data that might contain token/user
         if (response.data != null) {
           print('📦 Additional OTP response data: ${response.data}');
 
+          // Try to extract token from data if not already set
           if (response.token == null && response.data!['token'] != null) {
             final token = response.data!['token'].toString();
             print('🔑 Saving token from OTP data: $token');
@@ -224,39 +233,44 @@ class AuthController extends GetxController {
         phoneNumber,
       );
 
-      print(' Registration response: ${response.toString()}');
+      print('👤 Registration response: ${response.toString()}');
 
       if (response.success) {
-        print('Registration successful, processing data...');
+        print('✅ Registration successful, processing data...');
 
+        // Check if we have a token to save
         if (response.token != null && response.token!.isNotEmpty) {
-          print(' Saving token: ${response.token}');
+          print('🔑 Saving token: ${response.token}');
           await StorageService.saveToken(response.token!);
         } else {
-          print(' No token received in registration response');
+          print('⚠️ No token received in registration response');
         }
 
+        // Check if we have user data to save
         if (response.user != null) {
-          print(' Saving user data');
+          print('👤 Saving user data');
           await StorageService.saveUser(response.user!);
         } else {
-          print(' No user data received in registration response');
+          print('⚠️ No user data received in registration response');
         }
 
+        // Check if we have any data that might contain token/user
         if (response.data != null) {
-          print(' Additional registration data: ${response.data}');
+          print('📦 Additional registration data: ${response.data}');
 
+          // Try to extract token from data if not already set
           if (response.token == null && response.data!['token'] != null) {
             final token = response.data!['token'].toString();
-            print(' Saving token from registration data: $token');
+            print('🔑 Saving token from registration data: $token');
             await StorageService.saveToken(token);
           }
         }
 
+        // Verify we have what we need to proceed
         final token = await StorageService.getToken();
         final user = await StorageService.getUser();
 
-        print(' Post-registration verification:');
+        print('🔍 Post-registration verification:');
         print('   Token exists: ${token != null}');
         print('   User exists: ${user != null}');
 
@@ -274,7 +288,7 @@ class AuthController extends GetxController {
           return {
             'success': true,
             'message': response.message,
-            'shouldNavigate': true,
+            'shouldNavigate': true, // Still try to navigate
           };
         }
       } else {
@@ -316,15 +330,17 @@ class AuthController extends GetxController {
     return error.toString();
   }
 
+  // Logout method
   Future<void> logout() async {
     try {
       await StorageService.clear();
       Get.offAllNamed('/login');
     } catch (e) {
-      print(' Logout error: $e');
+      print('💥 Logout error: $e');
     }
   }
 
+  // Check if user is logged in
   Future<bool> isLoggedIn() async {
     final token = await StorageService.getToken();
     final user = await StorageService.getUser();

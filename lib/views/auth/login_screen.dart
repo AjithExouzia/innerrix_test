@@ -38,17 +38,26 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     if (!isLandscape) SizedBox(height: size.height * 0.05),
 
+                    // Header Section
                     _buildHeaderSection(size, isTablet),
                     SizedBox(height: size.height * 0.03),
 
+                    // Form Section
                     _buildFormSection(size, isTablet),
+
+                    SizedBox(height: size.height * 0.02),
+
+                    // OTP Login Option
+                    _buildOTPLoginSection(size, isTablet),
 
                     if (isLandscape) Spacer(),
 
+                    // Social Login Section
                     _buildSocialLoginSection(size, isTablet),
 
                     SizedBox(height: size.height * 0.02),
 
+                    // Sign Up Section
                     _buildSignUpSection(),
 
                     SizedBox(height: size.height * 0.05),
@@ -118,6 +127,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
         SizedBox(height: size.height * 0.02),
 
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () {
+              // Handle forget password
+            },
+            child: Text(
+              'Forget Password',
+              style: TextStyle(fontSize: isTablet ? size.width * 0.025 : 16),
+            ),
+          ),
+        ),
+
+        SizedBox(height: size.height * 0.02),
+
         Obx(
           () => CustomButton(
             text: 'Log in',
@@ -129,18 +153,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildSocialLoginSection(Size size, bool isTablet) {
+  Widget _buildOTPLoginSection(Size size, bool isTablet) {
     return Column(
       children: [
-        SizedBox(height: size.height * 0.02),
-
         Row(
           children: [
             Expanded(child: Divider()),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8.0),
               child: Text(
-                'or',
+                'OR',
                 style: TextStyle(fontSize: isTablet ? size.width * 0.025 : 16),
               ),
             ),
@@ -148,6 +170,57 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
         ),
 
+        SizedBox(height: size.height * 0.02),
+
+        OutlinedButton(
+          onPressed: () async {
+            if (_emailController.text.isEmpty ||
+                !_emailController.text.isEmail) {
+              Get.snackbar('Error', 'Please enter a valid email address');
+              return;
+            }
+
+            final result = await _authController.requestOTP(
+              _emailController.text.trim(),
+            );
+
+            if (result['success'] == true) {
+              Get.toNamed(
+                '/otp-verification',
+                arguments: {
+                  'email': _emailController.text.trim(),
+                  'isFromLogin': true,
+                },
+              );
+            } else {
+              Get.snackbar(
+                'Error',
+                result['message'] ?? 'Failed to send OTP',
+                backgroundColor: Colors.red,
+                colorText: Colors.white,
+              );
+            }
+          },
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.blue,
+            side: BorderSide(color: Colors.blue),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            minimumSize: Size(double.infinity, 50),
+          ),
+          child: Text(
+            'Login with OTP',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSocialLoginSection(Size size, bool isTablet) {
+    return Column(
+      children: [
         SizedBox(height: size.height * 0.02),
 
         CustomButton(
@@ -208,7 +281,7 @@ class _LoginScreenState extends State<LoginScreen> {
         final shouldNavigate = result['shouldNavigate'] ?? true;
 
         if (shouldNavigate) {
-          print('🚀 Navigating to home screen...');
+          print('🚀 Login successful, navigating to home...');
           Get.offAllNamed('/home');
         }
 

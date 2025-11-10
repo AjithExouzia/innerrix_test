@@ -35,6 +35,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
     _enteredEmail = widget.email;
     _startResendTimer();
 
+    // Auto-focus first OTP field
     WidgetsBinding.instance.addPostFrameCallback((_) {
       FocusScope.of(context).requestFocus(_focusNodes[0]);
     });
@@ -252,6 +253,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
                     FocusScope.of(context).requestFocus(_focusNodes[index - 1]);
                   }
 
+                  // Auto verify when all fields are filled
                   if (index == 5 && value.isNotEmpty) {
                     _verifyOTP();
                   }
@@ -351,6 +353,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen> {
         duration: Duration(seconds: 5),
       );
 
+      // Clear OTP fields on failure
       for (var controller in _otpControllers) {
         controller.clear();
       }
